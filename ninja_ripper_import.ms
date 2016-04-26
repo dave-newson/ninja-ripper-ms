@@ -38,6 +38,8 @@ if SysInfo.CPUCount == 1 then
     )
     SysInfo.ProcessAffinity = TargetAffinity
 
+-- Enable redraw at start. Helps with crash recovery
+enableSceneRedraw()
 
 ---Constants
 global RipSignature   = 0xDEADC0DE
@@ -48,7 +50,6 @@ global RipFileVersion = 4
 global g_ImportType = 1       --- Group/Single/List  (0,1,2)
 global g_InputSrc   = ""      --- Source Dir/File
 global g_VertexFormatRecog = 0 --- Auto/Manual  (0,1)
-global g_Tex0_FileLev = 0
 
 global g_PosX_Idx = 0
 global g_PosY_Idx = 0
@@ -325,6 +326,7 @@ fn ImportRip RipFilePath =
 			if j == g_NormY_Idx do ny = z
 			if j == g_NormZ_Idx do nz = z
 
+			-- is the IDX one of the UV maps?
 			for i = 1 to UV_Idx_array.count do (
 
 				if (j == UV_Idx_array[i][1]) then (
@@ -344,10 +346,15 @@ fn ImportRip RipFilePath =
 			nz = nz as Float
 		)
 
+		-- Verts and Normals
 		append Vert_array[(vx * g_ninjaScale),(vy * g_ninjaScale),(vz * g_ninjaScale)]
 		append Normal_array [nz,ny,nx]
 
+		-- UV Maps
 		for i = 1 to texUv.count do (
+			-- Skip texUv with no values. Yes this happens.
+			if (texUv[i][1] == undefined or texUv[i][2] == undefined) then (continue;)
+
 			append UV_array[i] [texUv[i][1],texUv[i][2],0];
 		)
 
@@ -355,27 +362,38 @@ fn ImportRip RipFilePath =
 		printLevel ("UV Map Count: " + UV_Idx_array.count as String) 2
 	)
 
-	TexFile = TextureFiles [ 1 + g_Tex0_FileLev ]
-	if TexFile == undefined do ( TexFile = "notexture.dds" )
+	-- Tidy UV Collection, remove empties from bad UV channels as they cause errors for Max.
+	for i = 1 to UV_array.count do (
+		if (UV_array[i] == undefined) then (continue;)
+		if (UV_array[i].count < 1) then (
+			deleteItem UV_array i;
+			i--;
+		)
+	)
 
-	TexFileName = getFilenamePath RipFilePath
-	TexFileName = TexFileName + TexFile
-	printDebug ("TEXTURE FILE: " + TexFileName)
+	---Multi/sub Material
+ 	thenewmaterial = multimaterial numsubs:TextureFiles.count
 
-	---Material
--- 	thenewmaterial = multimaterial numsubs:1
--- 	thenewsubmaterial = standardmaterial name:TexFile
--- 	thenewsubmaterial.diffusemap = bitmaptexture name:TexFile
--- 	thenewsubmaterial.diffusemap.filename = TexFileName
--- 	thenewmaterial.materiallist[1] = thenewsubmaterial
--- 	showtexturemap thenewsubmaterial thenewsubmaterial.diffusemap true
+	-- Map each texture file to a submap
+	for i=1 to TextureFiles.count do (
 
-	thenewmaterial = standardmaterial name:TexFile
-	thenewmaterial.diffusemap = bitmaptexture name:TexFile
-	thenewmaterial.diffusemap.filename = TexFileName
--- 	thenewmaterial.bumpmap = bitmaptexture name:TexFile
--- 	thenewmaterial.bumpmap.filename = TexFileName
-	showtexturemap thenewmaterial thenewmaterial.diffusemap true
+		-- Get the filename. use "notexture.dds" if things go wrong
+		if (TextureFiles[i] == undefined)
+		then ( TexFile = "notexture.dds" )
+		else ( TexFile = TextureFiles[i] )
+
+		TexFileName = getFilenamePath RipFilePath
+		TexFileName = TexFileName + TexFile
+
+		printLevel ("Mat.SubTextureFile: " + TexFile) 2
+
+		thenewsubmaterial = standardmaterial name:TexFile
+		thenewsubmaterial.diffusemap = bitmaptexture name:TexFile
+		thenewsubmaterial.diffusemap.filename = TexFileName
+		thenewsubmaterial.diffusemap.coords.MapChannel = i
+		thenewmaterial.materiallist[i] = thenewsubmaterial
+		showtexturemap thenewsubmaterial thenewsubmaterial.diffusemap true
+	)
 
 	-- Create Mesh
 	msh = mesh vertices:Vert_array faces:Face_array
@@ -465,9 +483,6 @@ rollout nr_rollout "Ninja Ripper Importer v1.3 beta7 alpha2" width:480 height:64
 	label lbl_tc1 "UV2" pos:[340,170] width:48 height:14 enabled:false
 	spinner tc1_u "u" pos:[340,195] width:38 height:16 range:[0,500,0] type:#integer enabled:false
 	spinner tc1_v "v" pos:[340,225] width:38 height:16 range:[0,500,0] type:#integer enabled:false
-
-	label lbl6 "Tex.Num" pos:[280,260] width:70 height:15
- 	spinner spnTex0Lev "" pos:[340,260] width:45 height:16 range:[0,7,0] type:#integer
 
 	--Mesh Transform
 	groupBox grp4 "Mesh Transformations" pos:[10,300] width:220 height:160
@@ -688,9 +703,6 @@ rollout nr_rollout "Ninja Ripper Importer v1.3 beta7 alpha2" width:480 height:64
 
 			meshscale = spnscale.value
 		)
-
-		g_Tex0_FileLev = spnTex0Lev.value as Integer
-
 
 		---Import part
 		if g_ImportType == 1 then ( ---Single file import
