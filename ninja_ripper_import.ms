@@ -5,7 +5,10 @@ Importer version 1.3 beta7 alpha2
 Changes:
 
 2016.04.25 (1.3 beta7 alpha2) by Dave Newson
-
+ - Multi/sub texture import enabled, removed TexNum
+ - Multi UV map support
+ - Prevented bad/missing UV maps crashing the import
+ - Fixed issues with
 
 2013.03.03 (1.3 beta7 alpha1) by CarLuver69
 - You can now flip on the XZ axis if your models appear inverted!
@@ -15,7 +18,6 @@ Changes:
 - "Debug" mode allows you to turn on useless print messages, VERY SLOW.
 - Program no longer hangs when importing many objects :D
 - Imports are now 50 - 75% faster. I was able to import 2,001 objects in 1 minute and 30 seconds!
-
 
 2013.01.09 (1.3 beta7):
 - added uv Scale function
@@ -326,7 +328,7 @@ fn ImportRip RipFilePath =
 			if j == g_NormY_Idx do ny = z
 			if j == g_NormZ_Idx do nz = z
 
-			-- is the IDX one of the UV maps?
+			-- IDX from a UV map?
 			for i = 1 to UV_Idx_array.count do (
 
 				if (j == UV_Idx_array[i][1]) then (
@@ -363,12 +365,14 @@ fn ImportRip RipFilePath =
 	)
 
 	-- Tidy UV Collection, remove empties from bad UV channels as they cause errors for Max.
-	for i = 1 to UV_array.count do (
-		if (UV_array[i] == undefined) then (continue;)
+	i = 1;
+	while (UV_array[i] != undefined) do (
+		-- Discard UVs without verts
 		if (UV_array[i].count < 1) then (
-			deleteItem UV_array i;
-			i--;
+			deleteItem UV_array i
+			i -= 1
 		)
+		i+=1
 	)
 
 	---Multi/sub Material
@@ -474,7 +478,7 @@ rollout nr_rollout "Ninja Ripper Importer v1.3 beta7 alpha2" width:480 height:64
 	spinner norm_z "z" pos:[73,256] width:38 height:20 type:#integer enabled:false
 
 	-- UV Format
-	groupBox grp_uv "UV Layout" pos:[240,130] width:220 height:160 columns:2
+	groupBox grp_uv "UV Layout" pos:[240,130] width:230 height:160 columns:2
 
 	label lbl_tc0 "UV1" pos:[280,170] width:48 height:14 enabled:false
 	spinner tc0_u "u" pos:[280,195] width:38 height:16 range:[0,500,0] type:#integer enabled:false
@@ -514,18 +518,20 @@ rollout nr_rollout "Ninja Ripper Importer v1.3 beta7 alpha2" width:480 height:64
 	--Misc
 	groupBox grp_misc "Misc" pos:[10,470] width:460 height:100
 
-	label label_coll_prefix "Name prefix for mesh without UV" pos:[20,490] width:200 height:15 enabled:true
-	editText input_coll_prefix "" pos:[190,487] width:100 height:20 enabled:false
+-- TODO: Guess mesh prefix feature
+--	label label_guess_prefix "Prefix object names with guessed type" pos:[50,500] width:220 height:15 enabled:true
+--	checkbox input_guess_prefix pos:[20,500] checked:false
 
-	label label_skip_dupe "Skip duplicate meshes" pos:[50,520] width:130 height:15 enabled:true
-	checkbox input_skip_dupe pos:[20,520] checked:false
+-- TODO: Distribute imported meshes
+--	label label_distribute "distribute imported meshes across the grid" pos:[50,520] width:220 height:15 enabled:true
+--	checkbox input_distribute pos:[20,520] checked:false
 
 	--Enable debug mode? (VERY SLOW)
     label lbldbgmde "Debug Level" pos:[10,610] width:77 height:30
     spinner inputDebugLevel "" pos:[80,610] width:45 height:16 range:[0,2,g_debugMode] type:#integer scale:1 enabled:true
 
 	-- Import button
-	button BtnImport "IMPORT" pos:[350,580] width:109 height:52
+	button BtnImport "IMPORT" pos:[360,580] width:109 height:52
 
 	on spnscale changed val do g_ninjaScale = val
 	on spnrotateX changed val do g_ninjarotX = val
@@ -744,36 +750,41 @@ rollout nr_rollout "Ninja Ripper Importer v1.3 beta7 alpha2" width:480 height:64
 								t1 = r0
 								t2 = r1
 
-								messageBox("Screen redrawing has been disabled to help boost performance.")
-								disableSceneRedraw()
+								-- try/catch to fix rendering on fail
+								try (
+									disableSceneRedraw()
 
-								tStart = timestamp()
+									tStart = timestamp()
 
-								doProcess = true
-								setProgressCancel = false
+									doProcess = true
+									setProgressCancel = false
 
-								progressBarText = "Importing "+ (t2 as string) +" objects..."
-								progressStart (progressBarText as string)
+									progressBarText = "Importing "+ (t2 as string) +" objects..."
+									progressStart (progressBarText as string)
 
-								for j = r0 to r1 while doProcess do(
-									if getProgressCancel() == true do (
-										doProcess = false
-										setProgressCancel = true
+									for j = r0 to r1 while doProcess do(
+										if getProgressCancel() == true do (
+											doProcess = false
+											setProgressCancel = true
+										)
+										if (getProgressCancel() == false) and (setProgressCancel == false) do (
+											RipDir1 = RipDir
+											ss = CreateMeshName j
+											RipDir1 = RipDir1 + ss;
+											printDebug ( "Group Import:" + RipDir1 as String )
+											ImportRip RipDir1
+
+											t1 = t1 + 1
+											tp = (100.0*t1/t2)
+											progressUpdate (tp)
+										)
 									)
-									if (getProgressCancel() == false) and (setProgressCancel == false) do (
-										RipDir1 = RipDir
-										ss = CreateMeshName j
-										RipDir1 = RipDir1 + ss;
-										printDebug ( "Group Import:" + RipDir1 as String )
-										ImportRip RipDir1
-
-										t1 = t1 + 1
-										tp = (100.0*t1/t2)
-										progressUpdate (tp)
-									)
+									progressEnd()
+									enableSceneRedraw()
+								) catch (
+									enableSceneRedraw()
+									messageBox("An error occurred.")
 								)
-								progressEnd()
-								enableSceneRedraw()
 
 								tEnd = timestamp()
 
