@@ -1,6 +1,7 @@
 # Ninja Ripper Max Importer
 
-An improved Ninja Ripper importer for 3D Studio Max.
+An unofficial improved Ninja Ripper importer for 3D Studio Max.
+https://github.com/jacky14/ninjaripper
 
 # Installation
 
