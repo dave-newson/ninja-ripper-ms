@@ -9,8 +9,8 @@ include "src/util/debug.ms"
 include "src/util/file.ms"
 include "src/util/string.ms"
 include "src/util/environment.ms"
-include "src/ui/main.ms"
 include "src/service/import.ms"
+include "src/ui/main.ms"
 
 -- Reset environment
 ui_reset();
