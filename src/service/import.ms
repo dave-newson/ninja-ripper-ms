@@ -196,6 +196,9 @@ fn ImportRip RipFilePath =
 				)
 				if (j == UV_Idx_array[i][2]) then (
 					texUv[i][2] = z as Float * g_flipUV;
+					if (g_flipUV == -1) then (
+						texUv[i][2] = texUv[i][2] + 1; -- move up to the top right Quadrant
+					)
 				)
 			)
 
